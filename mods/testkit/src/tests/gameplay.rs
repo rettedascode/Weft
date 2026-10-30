@@ -278,6 +278,45 @@ pub async fn bucket(t: T) -> R {
     Ok(())
 }
 
+/// An ingot in the inventory and a placed torch each make an advancement, the client gets them
+/// (a toast, the list on L), and `/advancements reset` takes them back.
+pub async fn advancements(t: T) -> R {
+    fn made(t: &T) -> u64 {
+        t.c().view().component(&base_api::ADVANCEMENTS).map_or(0, |a| a.done)
+    }
+    t.flat().await?;
+    t.check_eq(made(&t), 0, "a new player's advancements");
+    t.op("put me 0 iron_ingot 1").await?;
+    t.until("advancement for the ingot", Duration::from_secs(5), |t| made(t).count_ones() == 1).await?;
+    t.secs(0.15).await?;
+    t.shot("toast_sliding").await?;
+    t.secs(0.6).await?;
+    t.shot("toast").await?;
+    t.op("put me 1 torch 1").await?;
+    t.c().select(1);
+    t.look_at(add(t.feet(), [1, -1, 0]));
+    t.frames(2).await?;
+    t.press("core:use");
+    t.until("advancement for the torch", Duration::from_secs(5), |t| made(t).count_ones() == 2).await?;
+    t.press("base:advancements");
+    t.screen("base:advancements").await?;
+    t.frames(3).await?;
+    t.laid_out(&["text:Advancements", "text:Getting Started", "text:Exploration", "text:2 of 19 made"]);
+    t.shot("list").await?;
+    // The first tile of a group, right of its 90 pixel wide name, tells its details on hover.
+    if let Some([x, y, w, h]) = t.c().ui_rect("text:Making Progress") {
+        let st = t.state();
+        t.c().cursor(x + w + 13.0 * st.gui_scale / st.window[0] as f32, y + h / 2.0);
+        t.frames(5).await?;
+        t.shot("tooltip").await?;
+    }
+    t.c().close_screen();
+    t.no_screen().await?;
+    t.cmd("/advancements reset").await?;
+    t.until("advancements reset", Duration::from_secs(5), |t| made(t) == 0).await?;
+    Ok(())
+}
+
 /// 12 blocks down costs 9 health like vanilla.
 pub async fn fall_damage(t: T) -> R {
     t.flat().await?;

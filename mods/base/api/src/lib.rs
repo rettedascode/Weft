@@ -26,6 +26,12 @@ value! {
 pub static HUNGER: Component<Hunger> = Component::named("base:hunger");
 
 value! {
+    /// A player's advancements, a bit each in the order of the base game's list.
+    pub struct Advancements { pub done: u64 }
+}
+pub static ADVANCEMENTS: Component<Advancements> = Component::named("base:advancements");
+
+value! {
     /// Read by the hunger system; other mods set it on their own food.
     pub struct Food { pub hunger: u32, pub saturation: f32 }
 }
