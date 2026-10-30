@@ -278,6 +278,63 @@ pub async fn bucket(t: T) -> R {
     Ok(())
 }
 
+/// The bow, drawn and let go, shoots an arrow from the inventory: it flies, sticks in a wall
+/// where it hit, and its shooter picks it up again. Fully drawn, arrows hurt a pig.
+pub async fn bow(t: T) -> R {
+    fn arrows(t: &T) -> u32 {
+        (0..36).map(|i| t.c().inventory_slot(i)).filter(|s| s.item == item("base:arrow")).map(|s| s.count).sum()
+    }
+    async fn arrow_near(t: &T) -> Result<Option<String>, String> {
+        let list = t.op("near ~ ~ ~ 24").await?;
+        Ok(list.split_whitespace().find(|e| e.ends_with(":base:arrow")).and_then(|e| e.split(':').next()).map(str::to_string))
+    }
+    t.flat().await?;
+    t.op("mode survival").await?;
+    let f = t.feet();
+    t.fill(add(f, [-3, 0, -12]), add(f, [3, 5, -12]), "stone").await?;
+    t.op("put me 0 bow 1").await?;
+    t.op("put me 1 arrow 3").await?;
+    t.c().select(0);
+    t.c().look(0.0, 0.0);
+    t.frames(2).await?;
+    t.hold("core:use", 1.2);
+    t.secs(0.8).await?;
+    t.shot("drawing").await?;
+    t.until("an arrow shot", Duration::from_secs(3), |t| arrows(t) == 2).await?;
+    t.secs(1.0).await?;
+    let Some(id) = arrow_near(&t).await? else { return Err("no arrow flew".into()) };
+    let e = t.op(&format!("entity {id}")).await?;
+    let z: f64 = e.split_whitespace().nth(3).and_then(|z| z.parse().ok()).unwrap_or(0.0);
+    t.check((z - (f[2] as f64 - 11.0)).abs() < 0.6, format!("the arrow sticks in the wall at z {}: {e}", f[2] - 11));
+    t.check_eq(t.slot("me", 0).await?.2, 1, "the bow wears by one");
+    t.shot("stuck").await?;
+    // From the side: the head in the wall, the vanes toward where it came from.
+    t.c().teleport([f[0] as f64 + 2.5, f[1] as f64, f[2] as f64 - 10.6]);
+    t.c().look(90.0, -5.0);
+    t.frames(5).await?;
+    t.shot("stuck_side").await?;
+    // Walking up to it takes it back.
+    t.c().teleport([f[0] as f64 + 0.5, f[1] as f64, f[2] as f64 - 10.3]);
+    t.until("the arrow picked up", Duration::from_secs(5), |t| arrows(t) == 3).await?;
+    t.check(arrow_near(&t).await?.is_none(), "the arrow is gone from the wall");
+
+    // A pig five blocks ahead, in a lane too high to jump out of, so it stays in the line of
+    // fire: a full draw hurts it.
+    t.fill(add(f, [-1, 0, -8]), add(f, [-1, 1, -2]), "stone").await?;
+    t.fill(add(f, [1, 0, -8]), add(f, [1, 1, -2]), "stone").await?;
+    t.fill(add(f, [0, 0, -8]), add(f, [0, 1, -8]), "stone").await?;
+    t.c().teleport([f[0] as f64 + 0.5, f[1] as f64, f[2] as f64 + 0.5]);
+    // Down at the pig's middle from the eyes.
+    t.c().look(0.0, -13.0);
+    let pig = t.op(&format!("spawn base:pig {} {} {}", f[0], f[1], f[2] - 5)).await?;
+    t.secs(0.5).await?;
+    t.hold("core:use", 1.2);
+    t.secs(2.0).await?;
+    let health: f32 = t.op(&format!("health {pig}")).await?.parse().unwrap_or(10.0);
+    t.check(health < 10.0, format!("the pig was hit: health {health}"));
+    Ok(())
+}
+
 /// 12 blocks down costs 9 health like vanilla.
 pub async fn fall_damage(t: T) -> R {
     t.flat().await?;

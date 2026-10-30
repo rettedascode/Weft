@@ -2,6 +2,7 @@
 //! engine knows about stone, water or zombies.
 
 mod blocks;
+mod bow;
 mod items;
 mod machines;
 mod mobs;
@@ -38,6 +39,7 @@ fn init(r: &mut Registry) {
     sounds::register(r);
     mobs::register(r);
     worldgen::register(r);
+    bow::register(r);
     // Its terrain is described in `worldgen`.
     r.dimension(&OVERWORLD)
         .player_spawn()

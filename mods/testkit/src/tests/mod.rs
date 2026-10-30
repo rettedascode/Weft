@@ -66,6 +66,7 @@ pub fn all() -> Vec<TestDef> {
         gameplay::slot_accepts,
         gameplay::slot_limit,
         gameplay::bucket,
+        gameplay::bow,
         gameplay::battery,
         gameplay::burning,
         gameplay::entity_fields,
