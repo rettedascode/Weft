@@ -975,7 +975,9 @@ impl Client {
             self.conn.send(ToServer::Select(self.selected as u32));
         }
         let held = self.inventory.get(self.selected).copied().unwrap_or_default();
-        if (held.item, held.data) != (self.held_name.0.item, self.held_name.0.data) || old != self.selected {
+        // A variant of the same item (a bow being drawn) is not a new one.
+        let base = |i: u32| content().items.get(i as usize).map_or(i, |d| d.base(i));
+        if (base(held.item), held.data) != (base(self.held_name.0.item), self.held_name.0.data) || old != self.selected {
             self.held_name = (held, Instant::now());
         }
         // Eye and view widen or drop over a few frames like vanilla, not in one jump.

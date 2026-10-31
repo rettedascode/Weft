@@ -198,6 +198,17 @@ pub struct ItemDef {
     /// Boxes from its model file (`models/item/<name>.json`) in block units, drawn instead of
     /// the icon in hands, on the ground and in slots; empty: none.
     pub model: Vec<ModelBox>,
+    /// The item this is another look of (`variant_of/<item>` tag: a drawn bow), 0 for none.
+    /// Variants stay out of the creative inventory, and changing between an item and its
+    /// variants in hand is not a new item.
+    pub variant_of: u32,
+}
+
+impl ItemDef {
+    /// The item itself, or the one it is a variant of.
+    pub fn base(&self, id: u32) -> u32 {
+        if self.variant_of != 0 { self.variant_of } else { id }
+    }
 }
 
 /// A creative inventory tab: translated as `tab.<ns>.<name>`, or the mod's name for the tab a mod
@@ -1004,6 +1015,9 @@ fn creative_tabs(mods: &[ModMeta], games: &[crate::registry::RawGame], items: &[
     let mut leftover: Vec<(usize, Vec<u32>)> = Vec::new();
     for i in ordered {
         let def = &items[i as usize];
+        if def.variant_of != 0 {
+            continue;
+        }
         // A misspelt tab would quietly send the item to misc.
         for id in c.of(comps::ITEM, i).filter(|id| !tab_of.contains_key(id)) {
             if let Some(tab) = c.names[id as usize].strip_prefix("tab/") {
@@ -1318,6 +1332,7 @@ pub fn freeze(mut mods: Vec<ModMeta>, regs: Vec<RawRegistrar>) -> Result<Content
         order: 0,
         equip: None,
         model: Vec::new(),
+        variant_of: 0,
     }];
     let mut item_values: Vec<(ModId, Vec<RawValue>)> = vec![(ModId(u32::MAX), Vec::new())];
     for (owner, it) in items {
@@ -1373,6 +1388,7 @@ pub fn freeze(mut mods: Vec<ModMeta>, regs: Vec<RawRegistrar>) -> Result<Content
             order: (mods[owner.0 as usize].order as u64) << 32 | it.seq as u64,
             equip: None,
             model,
+            variant_of: 0,
         });
     }
     let item_names: FxHashMap<String, u32> =
@@ -1913,6 +1929,16 @@ pub fn freeze(mut mods: Vec<ModMeta>, regs: Vec<RawRegistrar>) -> Result<Content
             item_liquid.insert(i, (l as u16, empty));
             if empty != 0 {
                 containers.insert((empty, l as u16), i);
+            }
+        }
+    }
+    // Other looks of items: `variant_of/<item>` tags.
+    for i in 1..item_defs.len() {
+        for id in components.of(comps::ITEM, i as u32) {
+            let Some(base) = components.names[id as usize].strip_prefix("variant_of/") else { continue };
+            match item_names.get(base) {
+                Some(&b) => item_defs[i].variant_of = b,
+                None => errors.push(format!("item {} is a variant of unknown item {base}", item_defs[i].name)),
             }
         }
     }

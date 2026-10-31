@@ -1178,6 +1178,13 @@ impl ItemBuilder<'_> {
         let tag = format!("tab/{}", tab.name());
         self.tag(&tag)
     }
+    /// Another look of `base` that a mod turns it into and back (a bow being drawn): kept out of
+    /// the creative inventory, and changing between them in hand is not a new item (its name
+    /// does not show again). Give it the same components as `base`, they are its own.
+    pub fn variant_of(self, base: &Item) -> Self {
+        let tag = format!("variant_of/{}", base.name());
+        self.tag(&tag)
+    }
     /// Worn in equipment `slot` (any mod's), where it shows on the wearer's model over the parts
     /// the slot covers: `texture` (under `entity/`, like `armor/iron_1`) in the wearer's skin
     /// layout, `inflate` pixels out from the body.
