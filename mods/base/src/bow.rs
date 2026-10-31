@@ -1,7 +1,8 @@
 //! The bow, with vanilla's numbers: held down with the use key it draws, let go it shoots an
 //! arrow from the inventory, harder the longer it was drawn (a second for full power). While
-//! drawn, the player walks at a fifth of the speed, the view zooms in a little, and the bow in
-//! hand is one of three variants with the string further back, which everyone sees. Arrows fly
+//! drawn, the player walks at a fifth of the speed, the view zooms in a little, the bow is held
+//! up and aimed in first person, and the bow in hand is one of three variants with the string
+//! further back, which everyone sees. Arrows fly
 //! on their own path with gravity and drag, hurt what they hit (fully drawn ones are critical:
 //! they may hit harder and leave sparks behind) and stick in blocks, where they can be picked up
 //! again. Flint for their heads comes from gravel.
@@ -333,6 +334,7 @@ fn client(r: &mut Registry) {
                     c.send(&DRAW, &0);
                 }
                 c.fov_scale(1.0);
+                c.hand_aim(0.0);
                 *drawn = None;
             }
             (Some((since, told, at)), true) => {
@@ -340,6 +342,8 @@ fn client(r: &mut Registry) {
                 // Vanilla's zoom: up to 15% narrower, the square of a second's draw.
                 c.fov_scale(1.0 - secs.min(1.0).powi(2) * 0.15);
                 let p = power(secs);
+                // Held up and aimed, pulled toward the eye as it draws.
+                c.hand_aim(p.max(0.01));
                 let now = stage(p);
                 if now != told || at.elapsed().as_secs_f32() > 1.0 {
                     c.send(&DRAW, &now);
