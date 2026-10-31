@@ -2827,6 +2827,9 @@ pub mod client_op {
     /// Times the field of view by `num` (1 = as set; less zooms in, a drawn bow), on top of
     /// flying and sprinting, eased like them. Stays until changed.
     pub const FOV_SCALE: u32 = 18;
+    /// The held item in first person aimed like a drawn bow, `num` how far it is drawn 0..1
+    /// (0: held as usual). Stays until changed.
+    pub const HAND_AIM: u32 = 19;
 }
 
 /// `Host::client_text` sources.

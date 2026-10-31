@@ -315,6 +315,8 @@ pub struct Client {
     pub hurt_flash: f32,
     /// A mod's factor on the field of view (`client_op::FOV_SCALE`), 1 for none.
     pub fov_scale: f32,
+    /// How far the held item is drawn like a bow (`client_op::HAND_AIM`), 0 for held as usual.
+    pub hand_aim: f32,
     pub particles: particles::Particles,
     /// Scratch: taken items and where they fly to this frame.
     pulls: Vec<(u64, DVec3)>,
@@ -487,6 +489,7 @@ impl Client {
             max_health: 20.0,
             hurt_flash: 0.0,
             fov_scale: 1.0,
+            hand_aim: 0.0,
             particles,
             pulls: Vec::new(),
             frames: Vec::new(),
@@ -1737,6 +1740,7 @@ impl Client {
             swing: self.hand_swing,
             anim: self.self_anim.clone(),
             age: self.start.elapsed().as_secs_f32(),
+            aim: self.hand_aim,
         });
         let world = &self.world;
         let light = |p: IVec3| world.light(p);

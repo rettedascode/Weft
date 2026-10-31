@@ -407,6 +407,11 @@ pub unsafe extern "C" fn client_command(c: *mut abi::ClientCtx, op: u32, text: S
                     g.client.fov_scale = (num as f32).clamp(0.1, 2.0);
                 }
             }
+            op_::HAND_AIM => {
+                if let Some(g) = &mut r.game {
+                    g.client.hand_aim = (num as f32).clamp(0.0, 1.0);
+                }
+            }
             _ => return 0,
         }
         1

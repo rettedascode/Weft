@@ -196,6 +196,13 @@ impl Client {
         self.command(abi::client_op::FOV_SCALE, "", scale as f64);
     }
 
+    /// Holds the item in first person aimed like a drawn bow, `drawn` how far 0..1: brought in
+    /// front of the view and tilted, pulled toward the eye as it draws, trembling a little once
+    /// drawn far. 0 holds it as usual. It stays until changed, so set it every frame while drawing.
+    pub fn hand_aim(&self, drawn: f32) {
+        self.command(abi::client_op::HAND_AIM, "", drawn as f64);
+    }
+
     fn text(&self, which: u32, index: u32) -> String {
         unsafe { (host().client_text)(self.raw, which, index).as_str().to_string() }
     }

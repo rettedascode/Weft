@@ -26,6 +26,8 @@ pub struct Hand {
     /// bone of its keyframes.
     pub anim: Option<(String, f32, bool)>,
     pub age: f32,
+    /// How far the item is drawn like a bow, 0..1 (`client_op::HAND_AIM`); 0 holds it as usual.
+    pub aim: f32,
 }
 
 /// Opaque pixels of a sprite, for drawing it as a 1/16 thick solid like vanilla's held items.
@@ -869,6 +871,9 @@ fn hand_transform(cam: &Camera, h: &Hand, pose: Mat4) -> Option<Mat4> {
     let view = cam.view().inverse() * pose;
     let deg = |d: f32| d.to_radians();
     let swing_sin = (p * p * PI).sin();
+    if h.aim > 0.0 && !shows_block(h.stack.item) {
+        return Some(view * aimed(h.aim, h.age) * held_flat());
+    }
     let arm = view
         * Mat4::from_translation(Vec3::new(-0.4 * sr, 0.2 * (p.sqrt() * PI * 2.0).sin(), -0.2 * s))
         * Mat4::from_translation(Vec3::new(0.56, -0.52, -0.72))
@@ -880,10 +885,31 @@ fn hand_transform(cam: &Camera, h: &Hand, pose: Mat4) -> Option<Mat4> {
         // block.json: rotated 45 degrees, scale 0.4.
         arm * Mat4::from_rotation_y(deg(45.0)) * Mat4::from_scale(Vec3::splat(0.4)) * Mat4::from_translation(Vec3::splat(-0.5))
     } else {
-        // generated.json / handheld.json first person: rotation 0 -90 25, translation 1.13 3.2
-        // 1.13 (pixels), scale 0.68.
-        arm * Mat4::from_translation(Vec3::new(1.13, 3.2, 1.13) / 16.0) * Mat4::from_rotation_y(deg(-90.0)) * Mat4::from_rotation_z(deg(25.0)) * Mat4::from_scale(Vec3::splat(0.68)) * Mat4::from_translation(Vec3::splat(-0.5))
+        arm * held_flat()
     })
+}
+
+/// A flat item's first person display transform (generated.json / handheld.json: rotation
+/// 0 -90 25, translation 1.13 3.2 1.13 pixels, scale 0.68), from its unit cube.
+fn held_flat() -> Mat4 {
+    let deg = |d: f32| d.to_radians();
+    Mat4::from_translation(Vec3::new(1.13, 3.2, 1.13) / 16.0) * Mat4::from_rotation_y(deg(-90.0)) * Mat4::from_rotation_z(deg(25.0)) * Mat4::from_scale(Vec3::splat(0.68)) * Mat4::from_translation(Vec3::splat(-0.5))
+}
+
+/// An item held drawn like a bow, `drawn` 0..1, in view space (vanilla's numbers): the arm's
+/// place, then brought in toward the middle and tilted up, pulled toward the eye and stretched
+/// along the view as it draws, with a small tremble once it is drawn past a tenth.
+fn aimed(drawn: f32, age: f32) -> Mat4 {
+    let deg = |d: f32| d.to_radians();
+    let tremble = if drawn > 0.1 { (age * 20.0 * 1.3).sin() * (drawn - 0.1) * 0.004 } else { 0.0 };
+    Mat4::from_translation(Vec3::new(0.56, -0.52, -0.72))
+        * Mat4::from_translation(Vec3::new(-0.2785682, 0.18344387, 0.15731531))
+        * Mat4::from_rotation_x(deg(-13.935))
+        * Mat4::from_rotation_y(deg(35.3))
+        * Mat4::from_rotation_z(deg(-9.785))
+        * Mat4::from_translation(Vec3::new(0.0, tremble, drawn * 0.04))
+        * Mat4::from_scale(Vec3::new(1.0, 1.0, 1.0 + drawn * 0.2))
+        * Mat4::from_rotation_y(deg(-45.0))
 }
 
 /// The bare right arm (the model's `rightArm` bone) in front of the camera (vanilla's
