@@ -1,14 +1,18 @@
 //! The bow: held down with the use key it draws, let go it shoots an arrow from the inventory,
-//! harder the longer it was drawn (a second for full power). Arrows fly on their own path with
-//! gravity and drag, hurt what they hit and stick in blocks, where their shooter can pick them
-//! up again. Flint for their heads comes from gravel.
+//! harder the longer it was drawn (a second for full power). While drawn, the bow in hand is one
+//! of three variants with the string further back, which everyone sees. Arrows fly on their own
+//! path with gravity and drag and a faint trail, hurt what they hit and stick in blocks, where
+//! their shooter can pick them up again. Flint for their heads comes from gravel.
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Instant;
 
 use weft_sdk::*;
 
 pub static BOW: Item = Item::named("bow");
+/// The bow drawn a little, more, and fully: what the bow in hand turns into while drawn.
+static PULLING: [Item; 3] = [Item::named("bow_pulling_0"), Item::named("bow_pulling_1"), Item::named("bow_pulling_2")];
 pub static ARROW_ITEM: Item = Item::named("arrow");
 pub static FLINT: Item = Item::named("flint");
 pub static ARROW: Entity = Entity::named("arrow");
@@ -22,6 +26,13 @@ static FLIGHT: Component<Flight> = Component::named("flight");
 
 /// Client to server: the bow was let go after being drawn this many seconds.
 static SHOOT: Channel<f32> = Channel::named("bow_shoot");
+/// Client to server: how far the bow is drawn, 1 to 3 (`PULLING`), 0 when it no longer is. Sent
+/// when it changes and once a second while drawn.
+static DRAW: Channel<u32> = Channel::named("bow_draw");
+/// Server: players drawing, with when they last said so. A drawn bow of anyone else (they
+/// dropped it, left, the client went quiet) turns back into a plain bow.
+static DRAWING: Mutex<Option<HashMap<u64, Instant>>> = Mutex::new(None);
+static TRAIL: Particle = Particle::named("arrow_trail");
 
 /// Blocks per second at full draw, and the pull of gravity and the drag on the way (vanilla's
 /// 3 blocks and 0.05 a tick, 1% drag a tick).
@@ -39,8 +50,27 @@ fn power(secs: f32) -> f32 {
     ((secs * secs + 2.0 * secs) / 3.0).min(1.0)
 }
 
+/// Which of `PULLING` shows at `power` (1..3), vanilla's steps.
+fn stage(power: f32) -> u32 {
+    if power >= 0.9 {
+        3
+    } else if power >= 0.65 {
+        2
+    } else {
+        1
+    }
+}
+
+/// The bow or one of its drawn variants.
+fn is_bow(item: u32) -> bool {
+    item == BOW.id() || PULLING.iter().any(|p| p.id() == item)
+}
+
 pub fn register(r: &mut Registry) {
     r.item(&BOW).max_stack(1).durability(384).tab(&crate::tabs::COMBAT);
+    for p in &PULLING {
+        r.item(p).max_stack(1).durability(384).variant_of(&BOW);
+    }
     r.item(&ARROW_ITEM).tag("arrows").tab(&crate::tabs::COMBAT);
     r.item(&FLINT).tag("flint").tab(&crate::tabs::INGREDIENTS);
     r.shaped(&crate::recipes::CRAFTING, "bow", 1, &[" ts", "t s", " ts"], &[('t', "#stick"), ('s', "#string")]);
@@ -60,7 +90,53 @@ pub fn register(r: &mut Registry) {
     r.attach(&ARROW, &FLIGHT);
 
     r.packet(&SHOOT, |p, secs| shoot(&p.world(), p.player(), secs));
+    r.packet(&DRAW, |p, stage| draw(&p.world(), p.player(), stage));
+    r.world_tick(straighten_bows);
+    r.particle(&TRAIL).textures(&["trail"]).life(0.3, 0.45).size(0.06, 0.1).gravity(0.0).drag(0.85).color(0xC9CED8B0, 0xC9CED800).translucent();
     client(r);
+}
+
+/// The held bow as drawn to `stage` (0: a plain bow again), its wear kept.
+fn draw(w: &World, player: u64, stage: u32) {
+    let hotbar = w.inventory(player).group("hotbar");
+    let slot = w.selected_slot(player);
+    let held = hotbar.get(slot);
+    if !is_bow(held.item) {
+        return;
+    }
+    let item = match stage {
+        1..=3 => PULLING[stage as usize - 1].id(),
+        _ => BOW.id(),
+    };
+    if held.item != item {
+        hotbar.set(slot, ItemStack { item, ..held });
+    }
+    let mut drawing = DRAWING.lock().unwrap();
+    let drawing = drawing.get_or_insert_with(HashMap::new);
+    if stage == 0 {
+        drawing.remove(&player);
+    } else {
+        drawing.insert(player, Instant::now());
+    }
+}
+
+/// Twice a second: a drawn bow that nobody is drawing (dropped and picked up, its player gone
+/// quiet) turns back into a plain one.
+fn straighten_bows(w: &World) {
+    for id in w.players() {
+        if w.entity(id).is_none_or(|e| e.age % 10 != 0) {
+            continue;
+        }
+        let drawing = DRAWING.lock().unwrap().as_ref().and_then(|d| d.get(&id).copied()).is_some_and(|t| t.elapsed().as_secs_f32() < 2.5);
+        let inv = w.inventory(id);
+        let selected = w.selected_slot(id);
+        for i in 0..inv.size() {
+            let s = inv.get(i);
+            if s.item != BOW.id() && is_bow(s.item) && !(drawing && i == selected) {
+                inv.set(i, ItemStack { item: BOW.id(), ..s });
+            }
+        }
+    }
 }
 
 /// Shoots one arrow from `player`'s bow, drawn for `secs`.
@@ -71,10 +147,16 @@ fn shoot(w: &World, player: u64, secs: f32) {
     }
     let hotbar = w.inventory(player).group("hotbar");
     let slot = w.selected_slot(player);
-    let bow = hotbar.get(slot);
-    if bow.item != BOW.id() {
+    // Back to a plain bow, whatever happens next.
+    let held = hotbar.get(slot);
+    if !is_bow(held.item) {
         return;
     }
+    if let Some(d) = DRAWING.lock().unwrap().as_mut() {
+        d.remove(&player);
+    }
+    let bow = ItemStack { item: BOW.id(), ..held };
+    hotbar.set(slot, bow);
     let creative = w.creative(player);
     if !creative {
         let inv = w.inventory(player);
@@ -195,30 +277,69 @@ fn pick_up(w: &World, id: u64, pos: [f64; 3]) -> bool {
     false
 }
 
-/// Since when the use key is held with the bow in hand, on this client.
-static DRAWN: Mutex<Option<Instant>> = Mutex::new(None);
+/// On this client: since when the use key is held with the bow in hand, and the stage last told
+/// the server with when.
+static DRAWN: Mutex<Option<(Instant, u32, Instant)>> = Mutex::new(None);
+/// Where each flying arrow was last frame, for its trail.
+static LAST_SEEN: Mutex<Option<HashMap<u64, [f64; 3]>>> = Mutex::new(None);
 
 fn client(r: &mut Registry) {
     r.client_frame(|c| {
         let st = c.state();
-        let holding = c.inventory_slot(st.selected).item == BOW.id();
+        let holding = is_bow(c.inventory_slot(st.selected).item);
         let drawing = holding && c.held(&keys::USE) && c.screen().is_empty();
         let mut drawn = DRAWN.lock().unwrap();
         match (*drawn, drawing) {
-            (None, true) => *drawn = Some(Instant::now()),
-            (Some(since), false) => {
+            (None, true) => {
+                c.send(&DRAW, &1);
+                *drawn = Some((Instant::now(), 1, Instant::now()));
+            }
+            (Some((since, _, _)), false) => {
                 // Let go: shoot. Put away or a screen opened: only stop drawing.
                 if holding && c.screen().is_empty() {
                     c.send(&SHOOT, &since.elapsed().as_secs_f32());
+                } else {
+                    c.send(&DRAW, &0);
                 }
                 *drawn = None;
             }
-            (Some(since), true) => {
+            (Some((since, told, at)), true) => {
+                let p = power(since.elapsed().as_secs_f32());
+                let now = stage(p);
+                if now != told || at.elapsed().as_secs_f32() > 1.0 {
+                    c.send(&DRAW, &now);
+                    *drawn = Some((since, now, Instant::now()));
+                }
                 // How far it is drawn, under the crosshair.
-                let step = ((power(since.elapsed().as_secs_f32()) * 4.0).ceil() as usize).clamp(1, 4) - 1;
+                let step = ((p * 4.0).ceil() as usize).clamp(1, 4) - 1;
                 c.screen_text(0.5, 0.53, ["bow.base.charge.0", "bow.base.charge.1", "bow.base.charge.2", "bow.base.charge.3"][step], &[], 0xffffffff, 1.0);
             }
             (None, false) => {}
+        }
+    });
+    // A faint trail behind arrows in flight, made by each client for itself.
+    r.client_entity_tick(&ARROW, |c, e| {
+        let mut seen = LAST_SEEN.lock().unwrap();
+        let seen = seen.get_or_insert_with(HashMap::new);
+        if seen.len() > 512 {
+            seen.clear();
+        }
+        let pos = e.pos();
+        let mid = [pos[0], pos[1] + 0.125, pos[2]];
+        if let Some(was) = seen.insert(e.id(), mid) {
+            let d = [mid[0] - was[0], mid[1] - was[1], mid[2] - was[2]];
+            let moved = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+            // A puff every fifth of a block it moved; none once it is stuck.
+            if moved > 0.05 {
+                let n = (moved / 0.2).ceil().min(16.0) as u32;
+                for i in 0..n {
+                    let k = i as f64 / n as f64;
+                    drop(c.spawn_particles(&TRAIL, [was[0] + d[0] * k, was[1] + d[1] * k, was[2] + d[2] * k]));
+                }
+            }
+        }
+        if e.dying().is_some_and(|d| d >= 1.0) {
+            seen.remove(&e.id());
         }
     });
 }

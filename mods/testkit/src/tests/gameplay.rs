@@ -300,7 +300,10 @@ pub async fn bow(t: T) -> R {
     t.hold("core:use", 1.2);
     t.secs(0.8).await?;
     t.shot("drawing").await?;
+    // Drawn for 0.8 s the bow in hand is the middle step, and plain again once it shot.
+    t.check_eq(t.c().inventory_slot(0).item, item("base:bow_pulling_1"), "the bow in hand while drawn");
     t.until("an arrow shot", Duration::from_secs(3), |t| arrows(t) == 2).await?;
+    t.until("a plain bow again", Duration::from_secs(2), |t| t.c().inventory_slot(0).item == item("base:bow")).await?;
     t.secs(1.0).await?;
     let Some(id) = arrow_near(&t).await? else { return Err("no arrow flew".into()) };
     let e = t.op(&format!("entity {id}")).await?;
@@ -317,6 +320,27 @@ pub async fn bow(t: T) -> R {
     t.c().teleport([f[0] as f64 + 0.5, f[1] as f64, f[2] as f64 - 10.3]);
     t.until("the arrow picked up", Duration::from_secs(5), |t| arrows(t) == 3).await?;
     t.check(arrow_near(&t).await?.is_none(), "the arrow is gone from the wall");
+
+    // Up and away over the open field: a moment after it left, its trail behind it.
+    t.c().teleport([f[0] as f64 + 0.5, f[1] as f64, f[2] as f64 + 0.5]);
+    t.c().look(180.0, 10.0);
+    t.frames(3).await?;
+    t.hold("core:use", 1.2);
+    t.secs(1.4).await?;
+    t.shot("trail").await?;
+    // Straight up, seen from beside: its trail along the way.
+    t.c().look(0.0, 89.0);
+    t.frames(3).await?;
+    t.hold("core:use", 1.2);
+    t.secs(1.35).await?;
+    t.op("mode creative").await?;
+    t.c().fly(true);
+    t.c().teleport([f[0] as f64 + 7.5, f[1] as f64 + 6.0, f[2] as f64 + 0.5]);
+    t.c().look(90.0, 35.0);
+    t.frames(2).await?;
+    t.shot("trail_side").await?;
+    t.c().fly(false);
+    t.op("mode survival").await?;
 
     // A pig five blocks ahead, in a lane too high to jump out of, so it stays in the line of
     // fire: a full draw hurts it.
