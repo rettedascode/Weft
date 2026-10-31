@@ -190,6 +190,12 @@ impl Client {
         self.command(abi::client_op::RESPAWN, "", 0.0);
     }
 
+    /// Times the field of view by `scale` (1 = as the player set it; less zooms in, like a drawn
+    /// bow), eased in like the widening when sprinting. It stays until changed.
+    pub fn fov_scale(&self, scale: f32) {
+        self.command(abi::client_op::FOV_SCALE, "", scale as f64);
+    }
+
     fn text(&self, which: u32, index: u32) -> String {
         unsafe { (host().client_text)(self.raw, which, index).as_str().to_string() }
     }

@@ -402,6 +402,11 @@ pub unsafe extern "C" fn client_command(c: *mut abi::ClientCtx, op: u32, text: S
             op_::BENCH => r.bench = Some(crate::bench::Bench::new(&text, num.max(0.1) as f32)),
             op_::RESPAWN => r.handle(vec![Request::Respawn]),
             op_::RUN_COMMAND => return r.run_command(&text) as u64,
+            op_::FOV_SCALE => {
+                if let Some(g) = &mut r.game {
+                    g.client.fov_scale = (num as f32).clamp(0.1, 2.0);
+                }
+            }
             _ => return 0,
         }
         1

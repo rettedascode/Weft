@@ -313,6 +313,8 @@ pub struct Client {
     pub last_click: Option<(u32, u8, Instant)>,
     /// Seconds left of the red screen flash after taking damage.
     pub hurt_flash: f32,
+    /// A mod's factor on the field of view (`client_op::FOV_SCALE`), 1 for none.
+    pub fov_scale: f32,
     pub particles: particles::Particles,
     /// Scratch: taken items and where they fly to this frame.
     pulls: Vec<(u64, DVec3)>,
@@ -484,6 +486,7 @@ impl Client {
             health: 20.0,
             max_health: 20.0,
             hurt_flash: 0.0,
+            fov_scale: 1.0,
             particles,
             pulls: Vec::new(),
             frames: Vec::new(),
@@ -986,7 +989,7 @@ impl Client {
         let eye_target = self.player.dims().2;
         self.player.eye += (eye_target - self.player.eye) * k;
         let moving = input.held("core:forward");
-        let fov_target = if self.player.flying { 1.1 } else { 1.0 } + if self.player.sprint && moving && !sneaking { 0.15 } else { 0.0 };
+        let fov_target = (if self.player.flying { 1.1 } else { 1.0 } + if self.player.sprint && moving && !sneaking { 0.15 } else { 0.0 }) * self.fov_scale;
         self.player.fov_mul += (fov_target - self.player.fov_mul) * k as f32;
         if input.pressed("core:perspective") && input.captured {
             self.view = (self.view + 1) % 3;

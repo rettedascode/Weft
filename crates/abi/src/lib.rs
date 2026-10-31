@@ -2824,6 +2824,9 @@ pub mod client_op {
     /// Runs command `text` (`/tp ~ ~5 ~`) as the player, here if it is a client command, else
     /// on the server; returns an id for `Host::client_command_reply`. The chat stays out of it.
     pub const RUN_COMMAND: u32 = 16;
+    /// Times the field of view by `num` (1 = as set; less zooms in, a drawn bow), on top of
+    /// flying and sprinting, eased like them. Stays until changed.
+    pub const FOV_SCALE: u32 = 18;
 }
 
 /// `Host::client_text` sources.
