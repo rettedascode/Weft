@@ -321,24 +321,26 @@ pub async fn bow(t: T) -> R {
     t.until("the arrow picked up", Duration::from_secs(5), |t| arrows(t) == 3).await?;
     t.check(arrow_near(&t).await?.is_none(), "the arrow is gone from the wall");
 
-    // Up and away over the open field: a moment after it left, its trail behind it.
+    // Fully drawn, up and away over the open field: a critical arrow, sparks behind it.
     t.c().teleport([f[0] as f64 + 0.5, f[1] as f64, f[2] as f64 + 0.5]);
     t.c().look(180.0, 10.0);
     t.frames(3).await?;
     t.hold("core:use", 1.2);
     t.secs(1.4).await?;
-    t.shot("trail").await?;
-    // Straight up, seen from beside: its trail along the way.
+    t.shot("sparks").await?;
+    // Straight up, seen from beside: its sparks along the way. Away from where the pig is shot
+    // at later: it comes down again, and may hit its shooter like vanilla's.
+    t.c().teleport([f[0] as f64 + 10.5, f[1] as f64, f[2] as f64 + 10.5]);
     t.c().look(0.0, 89.0);
     t.frames(3).await?;
     t.hold("core:use", 1.2);
     t.secs(1.35).await?;
     t.op("mode creative").await?;
     t.c().fly(true);
-    t.c().teleport([f[0] as f64 + 7.5, f[1] as f64 + 6.0, f[2] as f64 + 0.5]);
+    t.c().teleport([f[0] as f64 + 17.5, f[1] as f64 + 6.0, f[2] as f64 + 10.5]);
     t.c().look(90.0, 35.0);
     t.frames(2).await?;
-    t.shot("trail_side").await?;
+    t.shot("sparks_side").await?;
     t.c().fly(false);
     t.op("mode survival").await?;
 

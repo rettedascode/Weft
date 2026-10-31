@@ -163,3 +163,14 @@ gui/flame_fill = gui/sprites/container/furnace/lit_progress
 # Classic 64x32 layouts: the top half of the modern 64x64 skins.
 entity/zombie = entity/zombie/zombie crop 0 0 64 32
 entity/spider = entity/spider/spider
+
+# The bow and its arrows. The flying arrow's skin is laid out like vanilla's: its side 16x5 at
+# the top left, the cross at its back below.
+item/bow = item/bow
+item/bow_pulling_0 = item/bow_pulling_0
+item/bow_pulling_1 = item/bow_pulling_1
+item/bow_pulling_2 = item/bow_pulling_2
+item/arrow = item/arrow
+item/flint = item/flint
+entity/arrow = entity/projectiles/arrow
+particle/arrow_crit = particle/critical_hit
